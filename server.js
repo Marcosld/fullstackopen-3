@@ -21,6 +21,8 @@ app.use(morgan(function (tokens, req, res) {
         JSON.stringify(req.body)
     ].join(' ')
 }))
+
+app.use(express.static('build'))
 app.use('/api', apiRouter);
 
 app.listen(PORT, () => {
