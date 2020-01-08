@@ -1,8 +1,9 @@
+require('dotenv').config()
 const express = require('express')
 const bodyParser = require('body-parser')
 const morgan = require('morgan')
 const cors = require('cors');
-let persons = require('./resources/persons')
+const Person = require('./models/person')
 const PORT = process.env.PORT || 3001
 
 const app = express();
@@ -30,17 +31,21 @@ app.listen(PORT, () => {
 })
 
 app.get('/info', (_, res) =>
-    res.send(`
-        <p>Phonebook has info for ${persons.length} people</p>
-        <p>${new Date()}</p>
-    `)
+    Person.find({}).then(persons =>
+        res.send(`
+            <p>Phonebook has info for ${persons.length} people</p>
+            <p>${new Date()}</p>
+        `)
+    )
 )
 
 apiRouter.use('/persons', personsRouter)
 
 personsRouter.route('/')
-    .get((_, res) => res.json(persons))
-    .post((req, res) => {
+    .get(
+        (_, res) => Person.find({}).then(persons => res.json(persons))
+    )
+    .post((req, res, next) => {
         const { name, number } = req.body;
         if (!name) {
             return res.status(400).json({error: 'name missing'})
@@ -48,27 +53,44 @@ personsRouter.route('/')
         if (!number) {
             return res.status(400).json({error: 'number missing'})
         }
-        if (persons.find(person => name === person.name)) {
-            return res.status(400).json({error: 'name already exists'})
-        }
-        const person = {
-            name,
-            number,
-            id: Math.floor(Math.random() * 999999999)
-        }
-        persons.push(person)
-        return res.json(person)
+        new Person({ name, number })
+            .save()
+            .then(person => res.json(person))
+            .catch(next)
     })
 
 personsRouter.route('/:id')
-    .get(({params}, res) => {
-        const person = persons.find(({id}) => id === parseInt(params.id))
-        if (!person) {
-            return res.status(404).json({ error: 'Resource doesnt exist'})
-        }
-        return res.json(person)
+    .get(({params}, res, next) =>
+        Person.findById(params.id)
+            .then(person => {
+                if (!person) {
+                    return res.status(404).json({ error: 'Resource doesnt exist'});
+                }
+                return res.json(person)
+            })
+            .catch(next)
+    )
+    .put(({params, body}, res, next) => {
+        Person.findByIdAndUpdate(params.id, body, { new: true })
+            .then(updatedPerson => res.json(updatedPerson))
+            .catch(next)
     })
-    .delete(({params}, res) => {
-        persons = persons.filter(({id}) => id !== parseInt(params.id))
-        res.sendStatus(204)
-    })
+    .delete(({params}, res, next) =>
+        Person.findByIdAndRemove(params.id)
+            .then(() => res.sendStatus(204))
+            .catch(next)
+    )
+
+const errorHandler = (error, request, response, next) => {
+    if (error.name === 'CastError' && error.kind === 'ObjectId') {
+        return response.status(400).send({ error: 'malformatted id' })
+    }
+
+    if (error.name === 'ValidationError') {
+        return response.status(400).json({ error: error.message })
+    }
+
+    next(error)
+}
+
+app.use(errorHandler)

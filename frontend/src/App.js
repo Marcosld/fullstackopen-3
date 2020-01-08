@@ -70,11 +70,16 @@ const App = () => {
     const onNewPerson = ({name, number}) => {
         const existingPerson = persons.find(person => person.name === name)
         if (!existingPerson) {
-            add({name, number}).then(person => {
-                setPersons([...persons, person])
-                setNotification({type: 'success', message: `Added ${person.name}!`})
-                setTimeout(() => setNotification(null), 2000);
-            })
+            add({name, number})
+                .then(person => {
+                    setPersons([...persons, person])
+                    setNotification({type: 'success', message: `Added ${person.name}!`})
+                    setTimeout(() => setNotification(null), 2000);
+                })
+                .catch(({response}) => {
+                    setNotification({type: 'error', message: response.data.error})
+                    setTimeout(() => setNotification(null), 2000);
+                })
         } else {
             onUpdatePerson({name, id: existingPerson.id, number})
         }
